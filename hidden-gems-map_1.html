@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>خريطة الكنوز المخفية</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --gold: #C9952A; --gold-light: #F0D080; --gold-dark: #8B6514;
+  --parchment: #F5EDD8; --parchment-dark: #E8D5A8;
+  --ink: #2C1810; --ink-light: #5C3D2E;
+  --terracotta: #B5542A; --teal: #1D6A72; --forest: #3A6B35; --rose: #9B3A4A;
+}
+html, body { height: 100%; font-family: 'Cairo', sans-serif; background: var(--parchment); color: var(--ink); direction: rtl; }
+#app { display: flex; flex-direction: column; height: 100vh; }
+
+/* Header */
+.header {
+  background: linear-gradient(135deg, #2C1810 0%, #4A2810 50%, #2C1810 100%);
+  border-bottom: 3px solid var(--gold);
+  padding: 10px 16px;
+  display: flex; align-items: center; justify-content: space-between;
+  flex-shrink: 0;
+}
+.header-title {
+  font-family: 'Amiri', serif; font-size: 24px;
+  color: var(--gold-light); letter-spacing: 1px;
+  display: flex; align-items: center; gap: 8px;
+}
+.header-subtitle { font-size: 12px; color: var(--parchment-dark); opacity: 0.7; font-weight: 300; }
+.header-stats { display: flex; gap: 12px; }
+.stat-badge {
+  text-align: center; background: rgba(201,149,42,0.15);
+  border: 1px solid rgba(201,149,42,0.4); border-radius: 8px; padding: 4px 12px;
+}
+.stat-num { font-size: 20px; font-weight: 700; color: var(--gold-light); line-height: 1; }
+.stat-lbl { font-size: 10px; color: var(--parchment-dark); opacity: 0.8; }
+
+/* Layout */
+.main { display: flex; flex: 1; overflow: hidden; }
+
+/* Sidebar */
+.sidebar {
+  width: 290px; min-width: 260px;
+  background: #FBF3E2;
+  border-left: 2px solid var(--parchment-dark);
+  display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0;
+}
+.search-box { padding: 12px; border-bottom: 1px solid var(--parchment-dark); background: #FDF8EE; }
+.search-input {
+  width: 100%; padding: 8px 14px;
+  border: 1.5px solid var(--parchment-dark); border-radius: 20px;
+  background: white; font-family: 'Cairo', sans-serif; font-size: 13px;
+  color: var(--ink); outline: none; direction: rtl; transition: border-color 0.2s;
+}
+.search-input:focus { border-color: var(--gold); }
+.search-input::placeholder { color: #9A8870; }
+
+.cats { padding: 10px 12px; border-bottom: 1px solid var(--parchment-dark); background: #FDF8EE; }
+.cats-title { font-size: 11px; color: var(--ink-light); font-weight: 700; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+.cats-grid { display: flex; flex-wrap: wrap; gap: 4px; }
+.cat-btn {
+  padding: 4px 10px; border-radius: 14px; border: 1.5px solid;
+  font-family: 'Cairo', sans-serif; font-size: 11px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s; white-space: nowrap; background: none;
+}
+.cat-btn:hover { transform: translateY(-1px); }
+
+.sort-bar {
+  padding: 8px 12px; border-bottom: 1px solid var(--parchment-dark);
+  display: flex; align-items: center; gap: 6px;
+}
+.sort-label { font-size: 11px; color: var(--ink-light); font-weight: 700; }
+.sort-select {
+  flex: 1; padding: 4px 8px; border: 1px solid var(--parchment-dark);
+  border-radius: 8px; background: white; font-family: 'Cairo', sans-serif;
+  font-size: 12px; color: var(--ink); outline: none; direction: rtl;
+}
+.sort-select:focus { border-color: var(--gold); }
+
+.gems-list { flex: 1; overflow-y: auto; padding: 8px; }
+.gems-list::-webkit-scrollbar { width: 4px; }
+.gems-list::-webkit-scrollbar-track { background: var(--parchment); }
+.gems-list::-webkit-scrollbar-thumb { background: var(--parchment-dark); border-radius: 2px; }
+
+.gem-card {
+  background: white; border: 1.5px solid var(--parchment-dark);
+  border-radius: 10px; padding: 10px; margin-bottom: 6px;
+  cursor: pointer; transition: all 0.15s;
+}
+.gem-card:hover { border-color: var(--gold); transform: translateX(-2px); }
+.gem-card.selected { border-color: var(--gold); background: #FFFBF0; box-shadow: 0 2px 8px rgba(201,149,42,0.2); }
+.gem-header { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 4px; }
+.gem-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+.gem-info { flex: 1; min-width: 0; }
+.gem-name { font-size: 13px; font-weight: 700; color: var(--ink); line-height: 1.2; }
+.gem-region { font-size: 10px; color: var(--ink-light); margin-top: 2px; }
+.gem-meta { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
+.gem-stars { display: flex; gap: 1px; }
+.star { font-size: 12px; cursor: pointer; transition: transform 0.1s; }
+.star:hover { transform: scale(1.3); }
+.star.filled { color: var(--gold); }
+.star.empty { color: #D4C49A; }
+.gem-tag { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 10px; border: 1px solid; }
+.gem-visits { font-size: 10px; color: var(--ink-light); }
+.no-results { text-align: center; padding: 30px 16px; color: var(--ink-light); font-size: 13px; }
+
+/* Map */
+.map-container { flex: 1; position: relative; }
+#map { width: 100%; height: 100%; }
+
+.add-fab {
+  position: absolute; bottom: 24px; right: 24px;
+  width: 54px; height: 54px; border-radius: 50%;
+  background: linear-gradient(135deg, #C9952A, #8B6514);
+  border: 2px solid var(--gold-light);
+  color: white; font-size: 26px; cursor: pointer; z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 16px rgba(139,101,20,0.5);
+  transition: transform 0.2s;
+}
+.add-fab:hover { transform: scale(1.1); }
+
+/* Hint bar */
+.hint-bar {
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+  background: rgba(44,24,16,0.82); color: var(--parchment);
+  font-size: 12px; padding: 6px 18px; border-radius: 20px;
+  z-index: 800; pointer-events: none; display: none; white-space: nowrap;
+  font-family: 'Cairo', sans-serif;
+}
+
+/* Detail panel */
+.detail-panel {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: white; border-top: 2px solid var(--gold);
+  border-radius: 16px 16px 0 0; padding: 16px 20px;
+  transform: translateY(100%); transition: transform 0.3s ease;
+  z-index: 900; max-height: 48%; overflow-y: auto;
+}
+.detail-panel.open { transform: translateY(0); }
+.detail-close {
+  position: absolute; top: 12px; right: 14px;
+  background: var(--parchment); border: 1px solid var(--parchment-dark);
+  border-radius: 50%; width: 28px; height: 28px; cursor: pointer;
+  font-size: 16px; display: flex; align-items: center; justify-content: center;
+  color: var(--ink-light); font-family: Arial, sans-serif;
+}
+.detail-name { font-family: 'Amiri', serif; font-size: 22px; color: var(--ink); margin-bottom: 4px; }
+.detail-desc { font-size: 13px; color: var(--ink-light); line-height: 1.7; margin: 8px 0; }
+.detail-row { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-light); margin-top: 4px; }
+.detail-img { width: 100%; border-radius: 10px; margin-bottom: 10px; max-height: 160px; object-fit: cover; }
+.btn-edit {
+  margin-top: 12px; margin-left: 8px; padding: 6px 16px;
+  background: none; border: 1px solid var(--gold-dark);
+  border-radius: 8px; color: var(--gold-dark);
+  font-family: 'Cairo', sans-serif; font-size: 12px; cursor: pointer;
+}
+.btn-edit:hover { background: #FDF3DC; }
+.btn-delete {
+  margin-top: 12px; padding: 6px 16px;
+  background: none; border: 1px solid #E24B4A;
+  border-radius: 8px; color: #A32D2D;
+  font-family: 'Cairo', sans-serif; font-size: 12px; cursor: pointer;
+}
+.btn-delete:hover { background: #FCEBEB; }
+
+/* Modal */
+.modal-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(44,24,16,0.65); z-index: 2000;
+  display: none; align-items: center; justify-content: center; padding: 20px;
+}
+.modal-backdrop.open { display: flex; }
+.modal {
+  background: var(--parchment); border: 2px solid var(--gold);
+  border-radius: 16px; width: 100%; max-width: 440px;
+  padding: 22px; max-height: 90vh; overflow-y: auto;
+}
+.modal-title {
+  font-family: 'Amiri', serif; font-size: 22px; color: var(--gold-dark);
+  margin-bottom: 18px; text-align: center;
+}
+.form-row { margin-bottom: 12px; }
+.form-label { font-size: 12px; font-weight: 700; color: var(--ink-light); margin-bottom: 5px; display: block; }
+.form-input, .form-select, .form-textarea {
+  width: 100%; padding: 9px 12px;
+  border: 1.5px solid var(--parchment-dark); border-radius: 8px;
+  background: white; font-family: 'Cairo', sans-serif;
+  font-size: 13px; color: var(--ink); outline: none; direction: rtl;
+}
+.form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--gold); }
+.form-textarea { resize: vertical; min-height: 75px; }
+.color-grid { display: flex; gap: 8px; flex-wrap: wrap; }
+.color-opt {
+  width: 30px; height: 30px; border-radius: 8px; cursor: pointer;
+  border: 2px solid transparent; transition: transform 0.1s;
+}
+.color-opt:hover, .color-opt.selected { border-color: var(--ink); transform: scale(1.15); }
+.modal-actions { display: flex; gap: 8px; margin-top: 18px; }
+.btn-primary {
+  flex: 1; padding: 11px;
+  background: linear-gradient(135deg, var(--gold), var(--gold-dark));
+  border: none; border-radius: 8px; color: white;
+  font-family: 'Cairo', sans-serif; font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.btn-primary:hover { opacity: 0.9; }
+.btn-secondary {
+  padding: 11px 18px; background: none;
+  border: 1.5px solid var(--parchment-dark); border-radius: 8px;
+  color: var(--ink-light); font-family: 'Cairo', sans-serif; font-size: 13px; cursor: pointer;
+}
+.btn-secondary:hover { border-color: var(--gold-dark); }
+
+/* Leaflet overrides */
+.leaflet-control-zoom a { font-family: Arial, sans-serif !important; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="header">
+    <div>
+      <div class="header-title">🗺️ خريطة الكنوز المخفية</div>
+      <div class="header-subtitle">اكتشف الأماكن النادرة حول العالم</div>
+    </div>
+    <div class="header-stats">
+      <div class="stat-badge">
+        <div class="stat-num" id="totalCount">0</div>
+        <div class="stat-lbl">مكان</div>
+      </div>
+      <div class="stat-badge">
+        <div class="stat-num" id="catCount">0</div>
+        <div class="stat-lbl">فئة</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="sidebar">
+      <div class="search-box">
+        <input class="search-input" id="searchInput" type="text" placeholder="🔍  ابحث عن مكان..." oninput="filterGems()">
+      </div>
+      <div class="cats">
+        <div class="cats-title">الفئات</div>
+        <div class="cats-grid" id="catsGrid"></div>
+      </div>
+      <div class="sort-bar">
+        <div class="sort-label">ترتيب:</div>
+        <select class="sort-select" id="sortSelect" onchange="filterGems()">
+          <option value="newest">الأحدث</option>
+          <option value="rating">الأعلى تقييماً</option>
+          <option value="name">الاسم</option>
+          <option value="visits">الأكثر زيارة</option>
+        </select>
+      </div>
+      <div class="gems-list" id="gemsList"></div>
+    </div>
+
+    <div class="map-container">
+      <div id="map"></div>
+      <button class="add-fab" id="addFab" onclick="startAddMode()" title="أضف مكاناً جديداً">+</button>
+      <div class="hint-bar" id="hintBar">📍 انقر على الخريطة لتحديد موقع الكنز</div>
+      <div class="detail-panel" id="detailPanel">
+        <button class="detail-close" onclick="closeDetail()">✕</button>
+        <div id="detailContent"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal">
+    <div class="modal-title" id="modalTitle">✨ إضافة كنز جديد</div>
+    <div class="form-row">
+      <label class="form-label">اسم المكان *</label>
+      <input class="form-input" id="fName" type="text" placeholder="أدخل اسم المكان...">
+    </div>
+    <div class="form-row">
+      <label class="form-label">الفئة *</label>
+      <select class="form-select" id="fCat"></select>
+    </div>
+    <div class="form-row">
+      <label class="form-label">اللون التراثي</label>
+      <div class="color-grid" id="colorGrid"></div>
+    </div>
+    <div class="form-row">
+      <label class="form-label">المنطقة / المدينة</label>
+      <input class="form-input" id="fRegion" type="text" placeholder="مثال: عمّان، القاهرة...">
+    </div>
+    <div class="form-row">
+      <label class="form-label">الوصف</label>
+      <textarea class="form-textarea" id="fDesc" placeholder="صف هذا المكان المميز..."></textarea>
+    </div>
+    <div class="form-row">
+      <label class="form-label">رابط صورة (اختياري)</label>
+      <input class="form-input" id="fImg" type="url" placeholder="https://...">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal()">إلغاء</button>
+      <button class="btn-primary" onclick="saveGem()">💾 حفظ الكنز</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const CATEGORIES = [
+  { id: 'all',       label: 'الكل',       emoji: '🌍', color: '#888780' },
+  { id: 'nature',    label: 'طبيعة',      emoji: '🌿', color: '#3A6B35' },
+  { id: 'historic',  label: 'تاريخي',     emoji: '🏛️', color: '#8B6514' },
+  { id: 'food',      label: 'طعام',       emoji: '🍽️', color: '#B5542A' },
+  { id: 'art',       label: 'فن وثقافة',  emoji: '🎨', color: '#9B3A4A' },
+  { id: 'spiritual', label: 'روحاني',     emoji: '✨', color: '#534AB7' },
+  { id: 'adventure', label: 'مغامرة',     emoji: '⛰️', color: '#1D6A72' },
+  { id: 'hidden',    label: 'سري',        emoji: '🗝️', color: '#2C1810' },
+];
+
+const HERITAGE_COLORS = [
+  { name: 'ذهبي',     hex: '#C9952A' },
+  { name: 'تراثي',    hex: '#8B6514' },
+  { name: 'طيني',     hex: '#B5542A' },
+  { name: 'زيتوني',   hex: '#3A6B35' },
+  { name: 'فيروزي',   hex: '#1D6A72' },
+  { name: 'ورديّ',    hex: '#9B3A4A' },
+  { name: 'بنفسجي',   hex: '#534AB7' },
+  { name: 'عتيق',     hex: '#2C1810' },
+];
+
+let gems = [
+  { id:1, name:'مقام النبي هود',         cat:'spiritual', lat:16.1,  lng:49.6,  color:'#534AB7', region:'حضرموت، اليمن',    desc:'موقع أثري روحاني نادر في قلب الصحراء، يزوره الحجاج من كل أنحاء العالم الإسلامي.', rating:5, visits:340, img:'' },
+  { id:2, name:'وادي رم الصامت',         cat:'nature',    lat:29.57, lng:35.42, color:'#C9952A', region:'وادي رم، الأردن',   desc:'ركن مجهول من الصحراء الحمراء بعيد عن المسارات السياحية، يبقى ساكناً كالبداية.',  rating:5, visits:128, img:'' },
+  { id:3, name:'حمام النور العثماني',    cat:'historic',  lat:33.51, lng:36.29, color:'#8B6514', region:'دمشق، سوريا',      desc:'حمام عثماني من القرن السادس عشر لا تزال قبابه النجمية تضيء بضوء طبيعي ساحر.',   rating:4, visits:87,  img:'' },
+  { id:4, name:'مطعم الصياد القديم',     cat:'food',      lat:25.28, lng:55.29, color:'#B5542A', region:'دبي القديمة',       desc:'مطعم عائلي صغير على الكورنيش يقدم السمك الطازج بوصفات إماراتية أصيلة منذ 1972.',  rating:5, visits:512, img:'' },
+  { id:5, name:'غاليري الجدارية المنسية',cat:'art',       lat:30.04, lng:31.23, color:'#9B3A4A', region:'القاهرة، مصر',     desc:'مبنى مهجور تحول إلى متحف مفتوح من فن الجرافيتي يحكي تاريخ الثورة بألوان صارخة.', rating:4, visits:203, img:'' },
+  { id:6, name:'شلال الزبرجد',           cat:'adventure', lat:26.14, lng:42.53, color:'#1D6A72', region:'نجد، السعودية',    desc:'شلال صغير محاط بالصخور البركانية يظهر فجأة وسط الصحراء كأنه خيال.',               rating:4, visits:64,  img:'' },
+];
+
+let nextId = 7, selectedCat = 'all', selectedGemId = null;
+let map, markers = {}, addingMode = false, pendingLatLng = null;
+let editingId = null, selectedColor = HERITAGE_COLORS[0].hex;
+
+function initMap() {
+  map = L.map('map').setView([25, 40], 4);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© OpenStreetMap © CARTO', maxZoom: 19
+  }).addTo(map);
+  map.on('click', onMapClick);
+  gems.forEach(g => addMarker(g));
+  updateStats();
+}
+
+function makeIcon(gem) {
+  const cat = CATEGORIES.find(c => c.id === gem.cat) || CATEGORIES[1];
+  return L.divIcon({
+    html: `<div style="width:36px;height:36px;border-radius:50% 50% 50% 0;background:${gem.color};border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;transform:rotate(-45deg)"><span style="transform:rotate(45deg);font-size:15px">${cat.emoji}</span></div>`,
+    className: '', iconSize: [36,36], iconAnchor: [18,36], popupAnchor: [0,-36]
+  });
+}
+
+function addMarker(gem) {
+  if (markers[gem.id]) map.removeLayer(markers[gem.id]);
+  markers[gem.id] = L.marker([gem.lat, gem.lng], { icon: makeIcon(gem) })
+    .addTo(map).on('click', () => showDetail(gem.id));
+}
+
+function onMapClick(e) {
+  if (!addingMode) return;
+  pendingLatLng = e.latlng;
+  addingMode = false;
+  document.getElementById('addFab').style.background = 'linear-gradient(135deg,#C9952A,#8B6514)';
+  document.getElementById('hintBar').style.display = 'none';
+  openModal(null);
+}
+
+function startAddMode() {
+  addingMode = !addingMode;
+  const fab = document.getElementById('addFab');
+  const hint = document.getElementById('hintBar');
+  if (addingMode) {
+    fab.style.background = 'linear-gradient(135deg,#1D6A72,#3A9EA8)';
+    hint.style.display = 'block';
+  } else {
+    fab.style.background = 'linear-gradient(135deg,#C9952A,#8B6514)';
+    hint.style.display = 'none';
+  }
+}
+
+function openModal(gemId) {
+  editingId = gemId;
+  selectedColor = HERITAGE_COLORS[0].hex;
+  document.getElementById('modalTitle').textContent = gemId ? '✏️ تعديل الكنز' : '✨ إضافة كنز جديد';
+  if (gemId) {
+    const g = gems.find(x => x.id === gemId);
+    document.getElementById('fName').value   = g.name;
+    document.getElementById('fRegion').value = g.region || '';
+    document.getElementById('fDesc').value   = g.desc || '';
+    document.getElementById('fImg').value    = g.img || '';
+    selectedColor = g.color;
+    setTimeout(() => { document.getElementById('fCat').value = g.cat; }, 10);
+  } else {
+    ['fName','fRegion','fDesc','fImg'].forEach(id => document.getElementById(id).value = '');
+  }
+  buildCatSelect();
+  buildColorGrid();
+  document.getElementById('modalBackdrop').classList.add('open');
+}
+
+function buildColorGrid() {
+  document.getElementById('colorGrid').innerHTML = HERITAGE_COLORS.map(c =>
+    `<div class="color-opt ${c.hex===selectedColor?'selected':''}" style="background:${c.hex}" title="${c.name}" onclick="selectColor('${c.hex}',this)"></div>`
+  ).join('');
+}
+
+function selectColor(hex, el) {
+  selectedColor = hex;
+  document.querySelectorAll('.color-opt').forEach(e => e.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+function buildCatSelect() {
+  document.getElementById('fCat').innerHTML = CATEGORIES.filter(c => c.id !== 'all').map(c =>
+    `<option value="${c.id}">${c.emoji} ${c.label}</option>`
+  ).join('');
+}
+
+function closeModal() {
+  document.getElementById('modalBackdrop').classList.remove('open');
+  pendingLatLng = null; editingId = null; addingMode = false;
+  document.getElementById('addFab').style.background = 'linear-gradient(135deg,#C9952A,#8B6514)';
+  document.getElementById('hintBar').style.display = 'none';
+}
+
+function saveGem() {
+  const name = document.getElementById('fName').value.trim();
+  const cat  = document.getElementById('fCat').value;
+  if (!name) { alert('الرجاء إدخال اسم المكان'); return; }
+  if (!editingId && !pendingLatLng) { alert('الرجاء تحديد موقع على الخريطة'); return; }
+
+  if (editingId) {
+    const g = gems.find(x => x.id === editingId);
+    Object.assign(g, {
+      name, cat, color: selectedColor,
+      region: document.getElementById('fRegion').value.trim(),
+      desc:   document.getElementById('fDesc').value.trim(),
+      img:    document.getElementById('fImg').value.trim(),
+    });
+    addMarker(g);
+  } else {
+    const g = {
+      id: nextId++, name, cat,
+      lat: pendingLatLng.lat, lng: pendingLatLng.lng,
+      color: selectedColor,
+      region: document.getElementById('fRegion').value.trim(),
+      desc:   document.getElementById('fDesc').value.trim(),
+      img:    document.getElementById('fImg').value.trim(),
+      rating: 3, visits: 0,
+    };
+    gems.push(g);
+    addMarker(g);
+  }
+  closeModal();
+  filterGems();
+  updateStats();
+}
+
+function filterGems() {
+  const q    = document.getElementById('searchInput').value.trim().toLowerCase();
+  const sort = document.getElementById('sortSelect').value;
+  let list = gems.filter(g => {
+    const catOk = selectedCat === 'all' || g.cat === selectedCat;
+    const qOk   = !q || g.name.toLowerCase().includes(q) || (g.region||'').toLowerCase().includes(q);
+    return catOk && qOk;
+  });
+  if (sort === 'rating')  list.sort((a,b) => b.rating - a.rating);
+  else if (sort === 'name')   list.sort((a,b) => a.name.localeCompare(b.name, 'ar'));
+  else if (sort === 'visits') list.sort((a,b) => b.visits - a.visits);
+  else list.sort((a,b) => b.id - a.id);
+  renderList(list);
+}
+
+function renderList(list) {
+  const el = document.getElementById('gemsList');
+  if (!list.length) { el.innerHTML = '<div class="no-results">🔍<br>لا توجد نتائج</div>'; return; }
+  el.innerHTML = list.map(g => {
+    const cat   = CATEGORIES.find(c => c.id === g.cat) || CATEGORIES[1];
+    const stars = [1,2,3,4,5].map(s =>
+      `<span class="star ${s<=g.rating?'filled':'empty'}" onclick="setRating(${g.id},${s},event)">★</span>`
+    ).join('');
+    return `<div class="gem-card ${g.id===selectedGemId?'selected':''}" onclick="selectGem(${g.id})">
+      <div class="gem-header">
+        <div class="gem-icon" style="background:${g.color}22;color:${g.color}">${cat.emoji}</div>
+        <div class="gem-info">
+          <div class="gem-name">${g.name}</div>
+          <div class="gem-region">📍 ${g.region||'موقع غير محدد'}</div>
+        </div>
+      </div>
+      <div class="gem-meta">
+        <div class="gem-stars">${stars}</div>
+        <div class="gem-tag" style="color:${g.color};border-color:${g.color}55;background:${g.color}15">${cat.label}</div>
+        <div class="gem-visits">👁 ${g.visits}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function setRating(id, val, e) {
+  e.stopPropagation();
+  const g = gems.find(x => x.id === id);
+  if (g) { g.rating = val; filterGems(); }
+}
+
+function selectGem(id) {
+  selectedGemId = id;
+  filterGems();
+  showDetail(id);
+  const g = gems.find(x => x.id === id);
+  if (g) map.flyTo([g.lat, g.lng], 12, { duration: 1.2 });
+}
+
+function showDetail(id) {
+  const g = gems.find(x => x.id === id);
+  if (!g) return;
+  const cat = CATEGORIES.find(c => c.id === g.cat) || CATEGORIES[1];
+  g.visits++;
+  const stars = '★'.repeat(g.rating) + '☆'.repeat(5 - g.rating);
+  document.getElementById('detailContent').innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+      <div style="font-size:30px">${cat.emoji}</div>
+      <div>
+        <div class="detail-name">${g.name}</div>
+        <div class="detail-row">📍 ${g.region||'موقع غير محدد'} &nbsp;|&nbsp; <span style="color:#C9952A">${stars}</span></div>
+      </div>
+    </div>
+    ${g.img ? `<img class="detail-img" src="${g.img}" onerror="this.style.display='none'">` : ''}
+    <div class="detail-desc">${g.desc||'لا يوجد وصف بعد.'}</div>
+    <div class="detail-row">🏷️ ${cat.label} &nbsp;|&nbsp; 👁 ${g.visits} زيارة &nbsp;|&nbsp; 🌐 ${g.lat.toFixed(3)}, ${g.lng.toFixed(3)}</div>
+    <div>
+      <button class="btn-edit"   onclick="editGem(${g.id})">✏️ تعديل</button>
+      <button class="btn-delete" onclick="deleteGem(${g.id})">🗑️ حذف</button>
+    </div>`;
+  document.getElementById('detailPanel').classList.add('open');
+  filterGems();
+}
+
+function editGem(id) { closeDetail(); openModal(id); }
+
+function deleteGem(id) {
+  if (!confirm('هل تريد حذف هذا الكنز؟')) return;
+  gems = gems.filter(g => g.id !== id);
+  if (markers[id]) { map.removeLayer(markers[id]); delete markers[id]; }
+  closeDetail(); filterGems(); updateStats();
+}
+
+function closeDetail() {
+  document.getElementById('detailPanel').classList.remove('open');
+  selectedGemId = null; filterGems();
+}
+
+function buildCatButtons() {
+  document.getElementById('catsGrid').innerHTML = CATEGORIES.map(c =>
+    `<button class="cat-btn ${c.id===selectedCat?'active':''}"
+      style="color:${c.id===selectedCat?'white':c.color};border-color:${c.color}88;background:${c.id===selectedCat?c.color:c.color+'18'}"
+      onclick="setCat('${c.id}',this)">${c.emoji} ${c.label}</button>`
+  ).join('');
+}
+
+function setCat(id) { selectedCat = id; buildCatButtons(); filterGems(); }
+
+function updateStats() {
+  document.getElementById('totalCount').textContent = gems.length;
+  document.getElementById('catCount').textContent   = new Set(gems.map(g => g.cat)).size;
+}
+
+window.addEventListener('load', () => {
+  initMap();
+  buildCatButtons();
+  filterGems();
+});
+</script>
+</body>
+</html>
